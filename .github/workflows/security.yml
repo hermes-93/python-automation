@@ -1,0 +1,70 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 7 * * 1"
+  workflow_dispatch:
+
+jobs:
+  bandit:
+    name: Bandit SAST
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install bandit
+        run: pip install bandit[toml]
+
+      - name: Run bandit
+        run: |
+          bandit -r scripts/ \
+            -f json \
+            -o bandit-results.json \
+            --severity-level medium \
+            --confidence-level medium \
+            -x tests/ || true
+
+      - name: Upload bandit results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-results
+          path: bandit-results.json
+
+  safety:
+    name: Dependency Vulnerability Scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install safety
+        run: pip install safety
+
+      - name: Run safety check
+        run: safety check -r requirements.txt --output text || true
+
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Semgrep
+        uses: semgrep/semgrep-action@v1
+        with:
+          config: >-
+            p/python
+            p/secrets
+        env:
+          SEMGREP_APP_TOKEN: ${{ secrets.SEMGREP_APP_TOKEN }}
+        continue-on-error: true
